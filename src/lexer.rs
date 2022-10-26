@@ -1,4 +1,5 @@
 use core::fmt;
+use std::collections::HashMap;
 
 use crate::lox::Lox;
 
@@ -137,8 +138,8 @@ impl fmt::Display for Token {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Scanner {
+#[derive(Debug)]
+pub struct Scanner<'a> {
     source: String,
     tokens: Vec<Token>,
     start: usize,
@@ -146,9 +147,43 @@ pub struct Scanner {
     line: usize,
 
     lox: Lox,
+    keywords: HashMap<&'a str, TokenType>,
 }
 
-impl Scanner {
+impl<'a> Default for Scanner<'a> {
+    fn default() -> Self {
+        use TokenType::*;
+        let keywords = HashMap::from([
+            ("and", And),
+            ("class", Class),
+            ("else", Else),
+            ("false", False),
+            ("for", For),
+            ("fun", Fun),
+            ("if", If),
+            ("nil", Nil),
+            ("or", Or),
+            ("print", Print),
+            ("return", Return),
+            ("super", Super),
+            ("this", This),
+            ("true", True),
+            ("var", Var),
+            ("while", While),
+        ]);
+        Self {
+            source: String::new(),
+            tokens: Vec::new(),
+            start: 0,
+            current: 0,
+            line: 1,
+            lox: Lox::default(),
+            keywords,
+        }
+    }
+}
+
+impl Scanner<'_> {
     pub fn new(source: String) -> Self {
         let mut s = Self::default();
         s.source = source;
@@ -225,11 +260,28 @@ impl Scanner {
             c => {
                 if self.is_digit(c) {
                     self.number();
+                } else if self.is_alpha(c) {
+                    self.identifier();
                 } else {
                     self.lox
                         .error(self.line, format!("Unexpected character {c}."));
                 }
             }
+        }
+    }
+
+    fn identifier(&mut self) {
+        while self.is_alphanumeric(self.peek()) {
+            self.advance();
+        }
+
+        let text = &self.source[self.start..self.current];
+        if let Some(token_type) = self.keywords.get(text) {
+            // Is in fact a keyword.
+            self.add_token(token_type.clone());
+        } else {
+            // Is not in the keywords map and must be another identifier.
+            self.add_token(TokenType::Identifier(text.to_string()));
         }
     }
 
@@ -307,6 +359,14 @@ impl Scanner {
         '\0'
     }
 
+    fn is_alpha(&self, c: char) -> bool {
+        c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_'
+    }
+
+    fn is_alphanumeric(&self, c: char) -> bool {
+        self.is_alpha(c) || self.is_digit(c)
+    }
+
     fn is_digit(&self, c: char) -> bool {
         c >= '0' && c <= '9'
     }
@@ -339,7 +399,9 @@ mod tests {
     use TokenType::*;
     #[test]
     fn test_scanner() {
-        let source = "(()){}!*+-/=<> <= >= == \"foo bar baz\" = 20 \n3.14 // ".to_string();
+        let source =
+            "(()){}!*+-/=<> <= >= == \"foo bar baz\" = 20 \n3.14 \nor orchid and if if_id // "
+                .to_string();
 
         let mut scanner = Scanner::new(source.clone());
         assert_eq!(scanner.start, 0);
@@ -347,6 +409,7 @@ mod tests {
         assert_eq!(scanner.line, 1);
 
         let tokens = scanner.scan_tokens();
+
         assert_eq!(
             tokens,
             vec![
@@ -375,7 +438,12 @@ mod tests {
                 Token::new(Equal, "=".to_string(), 1),
                 Token::new(Number(20.0), "20".to_string(), 1),
                 Token::new(Number(3.14), "3.14".to_string(), 2),
-                Token::new(Eof, "".to_string(), 2),
+                Token::new(Or, "or".to_string(), 3),
+                Token::new(Identifier("orchid".to_string()), "orchid".to_string(), 3),
+                Token::new(And, "and".to_string(), 3),
+                Token::new(If, "if".to_string(), 3),
+                Token::new(Identifier("if_id".to_string()), "if_id".to_string(), 3),
+                Token::new(Eof, "".to_string(), 3),
             ],
         );
 
