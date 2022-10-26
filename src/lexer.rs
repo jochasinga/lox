@@ -222,9 +222,37 @@ impl Scanner {
             ' ' | '\r' | '\t' => {}
             '\n' => self.line += 1,
             '"' => self.string(),
-            c => self
-                .lox
-                .error(self.line, format!("Unexpected character {c}.")),
+            c => {
+                if self.is_digit(c) {
+                    self.number();
+                } else {
+                    self.lox
+                        .error(self.line, format!("Unexpected character {c}."));
+                }
+            }
+        }
+    }
+
+    fn number(&mut self) {
+        while self.is_digit(self.peek()) {
+            self.advance();
+        }
+
+        // Look for a fractional part.
+        if self.peek() == '.' && self.is_digit(self.peek_next()) {
+            self.advance();
+
+            while self.is_digit(self.peek()) {
+                self.advance();
+            }
+        }
+
+        let num_str = &self.source[self.start..self.current];
+        let num = num_str.parse::<f64>();
+        if let Ok(n) = num_str.parse::<f64>() {
+            self.add_token(TokenType::Number(n));
+        } else {
+            self.lox.error(self.line, "Expected a decimal.".to_string());
         }
     }
 
@@ -260,7 +288,7 @@ impl Scanner {
         true
     }
 
-    fn peek(&mut self) -> char {
+    fn peek(&self) -> char {
         if self.is_at_end() {
             return '\0';
         }
@@ -268,6 +296,20 @@ impl Scanner {
             return c;
         }
         '\0'
+    }
+
+    fn peek_next(&self) -> char {
+        if self.current + 1 >= self.source.len() {
+            return '\0';
+        }
+        if let Some(c) = self.source.chars().nth(self.current + 1) {
+            return c;
+        }
+        '\0'
+    }
+
+    fn is_digit(&self, c: char) -> bool {
+        c >= '0' && c <= '9'
     }
 
     fn is_at_end(&self) -> bool {
@@ -298,7 +340,7 @@ mod tests {
     use TokenType::*;
     #[test]
     fn test_scanner() {
-        let source = "(()){}!*+-/=<> <= >= == \"foo bar baz\" = // ".to_string();
+        let source = "(()){}!*+-/=<> <= >= == \"foo bar baz\" = 20 3.14 // ".to_string();
 
         let mut scanner = Scanner::new(source.clone());
         assert_eq!(scanner.start, 0);
@@ -332,6 +374,8 @@ mod tests {
                     1
                 ),
                 Token::new(Equal, "=".to_string(), 1),
+                Token::new(Number(20.0), "20".to_string(), 1),
+                Token::new(Number(3.14), "3.14".to_string(), 1),
                 Token::new(Eof, "".to_string(), 1),
             ],
         );
