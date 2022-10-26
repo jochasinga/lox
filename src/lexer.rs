@@ -248,7 +248,6 @@ impl Scanner {
         }
 
         let num_str = &self.source[self.start..self.current];
-        let num = num_str.parse::<f64>();
         if let Ok(n) = num_str.parse::<f64>() {
             self.add_token(TokenType::Number(n));
         } else {
@@ -340,7 +339,7 @@ mod tests {
     use TokenType::*;
     #[test]
     fn test_scanner() {
-        let source = "(()){}!*+-/=<> <= >= == \"foo bar baz\" = 20 3.14 // ".to_string();
+        let source = "(()){}!*+-/=<> <= >= == \"foo bar baz\" = 20 \n3.14 // ".to_string();
 
         let mut scanner = Scanner::new(source.clone());
         assert_eq!(scanner.start, 0);
@@ -375,8 +374,8 @@ mod tests {
                 ),
                 Token::new(Equal, "=".to_string(), 1),
                 Token::new(Number(20.0), "20".to_string(), 1),
-                Token::new(Number(3.14), "3.14".to_string(), 1),
-                Token::new(Eof, "".to_string(), 1),
+                Token::new(Number(3.14), "3.14".to_string(), 2),
+                Token::new(Eof, "".to_string(), 2),
             ],
         );
 
